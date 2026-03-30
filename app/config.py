@@ -19,7 +19,8 @@ class Settings:
 
     # --- Colecciones ---
     COLLECTION_CATALOG = "ecommerce-rag-collection_openAI"
-    COLLECTION_POLICIES = "Info_Legal_General"
+    COLLECTION_POLICIES = "Info_Legal_AZURE"
+    COLLECTION_GENERAL = "Info_GENERAL_AZURE"
 
 settings = Settings()
 

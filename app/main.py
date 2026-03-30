@@ -10,9 +10,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Ya no necesitamos el @app.on_event("startup") porque Groq y Qdrant 
-# se inicializan globalmente en sus respectivos módulos al importarlos.
-
 @app.post("/retrieve_context", response_model=QueryResponse)
 async def retrieve_context(request: QueryRequest):
     query = request.query
@@ -22,25 +19,40 @@ async def retrieve_context(request: QueryRequest):
     
     # 1. Enrutamiento (Groq)
     print(f"\n🚀 [API] Nueva consulta recibida: '{query}'")
-    intent = classify_intent(query)
+    intent = await classify_intent(query)
     print(f"🔀 [API] Intención resuelta: {intent}")
     
     # 2. Selección de Colección y Búsqueda Vectorial
     context_data = []
     collection_used = None
     
-    if intent == "CATALOGO":
-        collection_used = settings.COLLECTION_CATALOG
-        print(f"🔎 [API] Buscando en Qdrant -> Colección: {collection_used}")
-        context_data = search_context(query, collection_used, limit=10) 
-        
-    elif intent == "POLITICAS":
-        collection_used = settings.COLLECTION_POLICIES
-        print(f"🔎 [API] Buscando en Qdrant -> Colección: {collection_used}")
-        context_data = search_context(query, collection_used, limit=4)
-        
-    else:
-        print("⏭️ [API] Intención GENERAL. Saltando búsqueda en Qdrant.")
+    try:
+        if intent == "CATALOGO":
+            collection_used = settings.COLLECTION_CATALOG
+            print(f"🔎 [API] Buscando en Qdrant -> Colección: {collection_used}")
+            # Importante: Mantener el await aquí
+            context_data = await search_context(query, collection_used, limit=10) 
+            
+        elif intent == "POLITICAS":
+            collection_used = settings.COLLECTION_POLICIES
+            print(f"🔎 [API] Buscando en Qdrant -> Colección: {collection_used}")
+            context_data = await search_context(query, collection_used, limit=4)
+            
+        elif intent == "INFO_GENERAL":
+            # 🔥 AQUÍ ENTRAN TUS PDFs (Wompi, DIAN, Costos, Misión)
+            collection_used = settings.COLLECTION_GENERAL
+            print(f"🔎 [API] Buscando en Qdrant -> Colección: {collection_used}")
+            context_data = await search_context(query, collection_used, limit=5)
+            
+        else: # Si Groq devuelve "CONVERSACIONAL" u otra cosa
+            collection_used = "N/A"
+            print("⏭️ [API] Intención CONVERSACIONAL. Saltando búsqueda en Qdrant.")
+            context_data = [] 
+
+    except Exception as e:
+        # 🔥 BLINDAJE: Si Qdrant falla (ej. colección no existe), no tumbamos la API
+        print(f"❌ [API CRITICAL ERROR] Falló el retriever: {str(e)}")
+        context_data = []
         
     # 3. Respuesta empaquetada para tu segunda API (Gateway/Bot)
     return QueryResponse(
