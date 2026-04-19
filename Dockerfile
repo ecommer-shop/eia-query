@@ -1,37 +1,47 @@
-# Usamos python 3.11 slim (buen balance entre tamaño y compatibilidad)
-FROM python:3.11-slim
+# Etapa 1: Constructor (Build Stage)
+FROM ghcr.io/astral-sh/uv:latest AS uv_bin
+FROM python:3.13-slim AS builder
 
-# Evitar escritura de .pyc y forzar logs directos
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1. Instalar dependencias base del sistema y limpiar basura de apt
-# Solo instalamos build-essential temporalmente por si alguna librería requiere compilar en C
+# Instalar uv
+COPY --from=uv_bin /uv /uv/bin/uv
+ENV PATH="/uv/bin:$PATH"
+
+# Dependencias de compilación (solo si alguna de tus libs lo pide)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. EL TRUCO MAGISTRAL: Instalar PyTorch en versión CPU explícitamente primero.
-# Esto evita que sentence-transformers descargue los ~3GB de CUDA.
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# Copiar archivos de configuración
+COPY pyproject.toml uv.lock ./
 
-# 3. Copiar e instalar los requirements que me pasaste
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Instalamos todo lo que esté en tu pyproject.toml (menos torch si lo quitas de ahí)
+# uv sync crea el .venv automáticamente
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project
 
-# 4. Pre-descargar el modelo de embeddings en la imagen para evitar descargas en Runtime
-# Usamos una capa específica para esto. 
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+# Etapa 2: Imagen Final (Runtime Stage)
+FROM python:3.13-slim
 
-# 5. Limpiar dependencias de construcción (build-essential) para adelgazar la imagen final
-RUN apt-get purge -y --auto-remove build-essential
+WORKDIR /app
 
-# 6. Copiar el código de la aplicación
-COPY ./app ./app
+# Configuración de puerto para Railway y entorno virtual
+ENV PORT=8000 \
+    PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-EXPOSE 8000
+# Copiar solo el entorno virtual y el código
+COPY --from=builder /app/.venv /app/.venv
+COPY app/ /app/app/
 
-# Lanzar Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Exponer el puerto dinámico
+EXPOSE ${PORT}
+
+# Comando de ejecución adaptado para Railway
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]

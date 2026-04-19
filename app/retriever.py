@@ -19,7 +19,7 @@ azure_client = AsyncAzureOpenAI(
 )
 
 # 2. Convertimos la función a corrutina (async def)
-async def search_context(query: str, collection_name: str, limit: int = 5) -> list:
+async def search_context(query: str, collection_name: str, limit: int = 3) -> list:
     print(f"\n🔎 [RETRIEVER] Buscando: '{query}' en colección '{collection_name}'")
     
     try:
