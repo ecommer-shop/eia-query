@@ -8,18 +8,19 @@ print(f"🔌 [INIT] Conectando a Qdrant (Async) en: {settings.QDRANT_URL}")
 qdrant_client = AsyncQdrantClient(
     url=settings.QDRANT_URL, 
     api_key=settings.QDRANT_API_KEY, 
-    timeout=10.0
+    timeout=10.0,
+    check_compatibility=False
 )
 
 print(f"🧠 [INIT] Configurando Azure OpenAI (Async) - Endpoint: {settings.AZURE_OPENAI_ENDPOINT}")
 azure_client = AsyncAzureOpenAI(
     api_key=settings.AZURE_OPENAI_API_KEY,
-    api_version="2024-02-01", # Asegúrate de que esta versión soporte tu deployment
+    api_version="2024-02-01", 
     azure_endpoint=settings.AZURE_OPENAI_ENDPOINT
 )
 
 # 2. Convertimos la función a corrutina (async def)
-async def search_context(query: str, collection_name: str, limit: int = 5) -> list:
+async def search_context(query: str, collection_name: str, limit: int = 3) -> list:
     print(f"\n🔎 [RETRIEVER] Buscando: '{query}' en colección '{collection_name}'")
     
     try:
