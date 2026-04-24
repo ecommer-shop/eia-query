@@ -1,47 +1,48 @@
-# Etapa 1: Constructor (Build Stage)
-FROM ghcr.io/astral-sh/uv:latest AS uv_bin
-FROM python:3.13-slim AS builder
+# Usa una imagen base de Python 3.13 slim
+FROM python:3.13-slim AS runtime
 
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    PYTHONUNBUFFERED=1
+# Instalamos uv copiando los binarios desde la imagen oficial
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Variables de entorno para optimizar uv y python
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
 
 WORKDIR /app
 
-# Instalar uv
-COPY --from=uv_bin /uv /uv/bin/uv
-ENV PATH="/uv/bin:$PATH"
-
-# Dependencias de compilación (solo si alguna de tus libs lo pide)
+# Instalamos dependencias del sistema necesarias (gcc para algunas librerías si fuera necesario)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar archivos de configuración
+# Copiamos solo los archivos de dependencias primero para aprovechar el cache de capas
 COPY pyproject.toml uv.lock ./
 
-# Instalamos todo lo que esté en tu pyproject.toml (menos torch si lo quitas de ahí)
-# uv sync crea el .venv automáticamente
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project
+# Instalamos las dependencias (sin instalar el proyecto aún y sin dependencias de desarrollo)
+RUN uv sync --frozen --no-install-project --no-dev
 
-# Etapa 2: Imagen Final (Runtime Stage)
-FROM python:3.13-slim
+# Copiamos el resto de la aplicación
+COPY . .
 
-WORKDIR /app
+# Sincronizamos el proyecto
+RUN uv sync --frozen --no-dev
 
-# Configuración de puerto para Railway y entorno virtual
-ENV PORT=8000 \
-    PATH="/app/.venv/bin:$PATH" \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Colocamos el entorno virtual en el PATH para que uvicorn sea ejecutable directamente
+ENV PATH="/app/.venv/bin:$PATH"
 
-# Copiar solo el entorno virtual y el código
-COPY --from=builder /app/.venv /app/.venv
-COPY app/ /app/app/
+# Configuración de usuario no-root por seguridad
+RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/app app
+RUN chown -R app:app /app
 
-# Exponer el puerto dinámico
+# Variables de entorno por defecto
+ENV PORT=8000
+ENV UVICORN_WORKERS=1
+
+USER app
+
 EXPOSE ${PORT}
 
-# Comando de ejecución adaptado para Railway
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+# Ejecutamos con uvicorn directamente (ya está en el PATH gracias al venv de uv)
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${UVICORN_WORKERS}"]
