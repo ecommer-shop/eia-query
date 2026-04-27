@@ -11,7 +11,9 @@ app = FastAPI(
     description="Microservicio de enrutamiento y recuperación vectorial",
     version="1.0.0"
 )
-
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "message": "API de RAG funcionando en Railway"}
 @app.post("/retrieve_context", response_model=QueryResponse)
 async def retrieve_context(request: QueryRequest):
     query = request.query
