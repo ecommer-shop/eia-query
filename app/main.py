@@ -19,7 +19,7 @@ app = FastAPI(
     version="1.0.0",
 )
 @app.get("/")
-async def health_check():
+async def root():
     return {"status": "ok", "message": "API de RAG funcionando en Railway"}
 
 @app.post("/retrieve_context", response_model=QueryResponse)
