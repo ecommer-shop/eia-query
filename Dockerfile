@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml uv.lock ./
 
 # 3. Sincronizar dependencias con uv
-RUN uv sync --frozen --no-dev --no-install-group dev
+RUN uv sync --frozen --no-dev
 
 # 4. Pre-descargar el modelo de embeddings en la imagen para evitar descargas en Runtime
 RUN uv run --no-dev python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
