@@ -7,25 +7,24 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# 1. Instalar dependencias base del sistema y limpiar basura de apt
-# Solo instalamos build-essential temporalmente por si alguna librería requiere compilar en C
+# Instalar uv (gestor de paquetes Python)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# 1. Instalar dependencias base del sistema
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. EL TRUCO MAGISTRAL: Instalar PyTorch en versión CPU explícitamente primero.
-# Esto evita que sentence-transformers descargue los ~3GB de CUDA.
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+# 2. Copiar archivos de dependencias
+COPY pyproject.toml uv.lock ./
 
-# 3. Copiar e instalar los requirements que me pasaste
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# 3. Sincronizar dependencias con uv
+RUN uv sync --frozen --no-dev --no-install-group dev
 
 # 4. Pre-descargar el modelo de embeddings en la imagen para evitar descargas en Runtime
-# Usamos una capa específica para esto. 
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+RUN uv run --no-dev python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
 
-# 5. Limpiar dependencias de construcción (build-essential) para adelgazar la imagen final
+# 5. Limpiar dependencias de construcción para adelgazar la imagen final
 RUN apt-get purge -y --auto-remove build-essential
 
 # 6. Copiar el código de la aplicación
@@ -34,4 +33,4 @@ COPY ./app ./app
 EXPOSE 8000
 
 # Lanzar Uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
