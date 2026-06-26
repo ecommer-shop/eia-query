@@ -18,7 +18,7 @@ class Settings:
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
     # --- Colecciones ---
-    COLLECTION_CATALOG = "ecommerce-rag-collection_openAI"
+    COLLECTION_CATALOG = "ecommerce-catalog"
     COLLECTION_POLICIES = "Info_Legal_AZURE"
     COLLECTION_GENERAL = "Info_GENERAL_AZURE"
 

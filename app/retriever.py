@@ -27,7 +27,7 @@ async def search_context(query: str, collection_name: str, limit: int = 5) -> li
         response = await azure_client.embeddings.create(
             input=[query],
             model=settings.AZURE_OPENAI_DEPLOYMENT,
-            dimensions=384
+            dimensions=1536
         )
         
         query_vector = response.data[0].embedding
